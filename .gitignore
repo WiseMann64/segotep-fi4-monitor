@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Build output
+build/
+dist/
+*.egg-info/
+
+# Local/runtime data
+*.log
+config.local.json
+
+# Vendor binary: obtain from LibreHardwareMonitor release/source separately.
+resources/LibreHardwareMonitorLib.dll
+
+# IDE/OS
+.idea/
+.vscode/
+*.user
+*.suo
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,6 @@
+{
+  "temperature_unit": "C",
+  "update_interval_ms": 200,
+  "retry_interval_s": 1.0,
+  "logging": true
+}

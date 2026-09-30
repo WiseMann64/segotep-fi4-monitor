@@ -47,13 +47,29 @@ class LibreHardwareMonitorProvider:
             raise TelemetryError(f"LibreHardwareMonitorLib.dll not found: {dll_path}")
 
         try:
+            import pythonnet
+
+            if pythonnet.get_runtime_info() is None:
+                pythonnet.load("coreclr")
+
             import clr
 
             clr.AddReference(str(dll_path))
             from LibreHardwareMonitor.Hardware import Computer, SensorType
+            from LibreHardwareMonitor.PawnIo import PawnIo
             import psutil
+            pawnio_installed = bool(PawnIo.IsInstalled)
         except Exception as exc:  # pragma: no cover - requires Windows/.NET runtime
-            raise TelemetryError("unable to load LibreHardwareMonitor/pythonnet") from exc
+            detail = f"{type(exc).__name__}: {exc}"
+            raise TelemetryError(
+                f"unable to load LibreHardwareMonitor/pythonnet ({detail})"
+            ) from exc
+
+        if not pawnio_installed:
+            raise TelemetryError(
+                "CPU sensor access requires the PawnIO driver. Install it from "
+                "https://github.com/namazso/PawnIO.Setup/releases"
+            )
         return Computer, SensorType, psutil
 
     @staticmethod
@@ -130,17 +146,24 @@ class LibreHardwareMonitorProvider:
         if self._computer is None or self._temperature_sensor is None or self._power_sensor is None:
             raise TelemetryError("telemetry provider is not started")
 
+        stage = "update hardware"
         try:
-            import psutil
-
             for hardware in getattr(self._computer, "Hardware", ()) or ():
                 for item in self._iter_hardware(hardware):
                     item.Update()
+
+            stage = f"read temperature sensor {self._temperature_sensor.Name!s}"
             temperature = float(self._temperature_sensor.Value)
+
+            stage = f"read power sensor {self._power_sensor.Name!s}"
             power = float(self._power_sensor.Value)
+
+            stage = "read CPU utilization"
+            import psutil
             utilization = float(psutil.cpu_percent(interval=None))
         except Exception as exc:  # pragma: no cover - requires Windows/.NET runtime
-            raise TelemetryError("unable to read CPU telemetry") from exc
+            detail = f"{type(exc).__name__}: {exc}"
+            raise TelemetryError(f"unable to {stage} ({detail})") from exc
 
         values = (temperature, utilization, power)
         if not all(math.isfinite(value) for value in values):

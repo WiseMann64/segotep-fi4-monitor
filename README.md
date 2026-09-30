@@ -9,6 +9,7 @@ The app reads sensors through LibreHardwareMonitor, writes the confirmed FI4 HID
 - CPU temperature, utilization, and package power on the FI4 display.
 - Display-only EMA smoothing, with faster response to rising temperature and power.
 - Independent HID keep-alive sender, defaulting to 5 Hz, with 5, 10, and 20 Hz tray options.
+- LCD value changes can be paced from 0.2 to 1.5 seconds in 0.1-second steps; the default is 0.5 seconds.
 - System tray switch for Celsius or Fahrenheit. The choice applies immediately and is saved in the config.
 - Open or close a live console from the tray. It shows recent log lines and live telemetry/device errors.
 - Optional per-user Windows startup registration from the tray, or with command-line flags.

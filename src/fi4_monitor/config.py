@@ -21,6 +21,7 @@ class AppConfig:
     retry_interval_s: float = 1.0
     logging: bool = True
     display_interval_ms: int = 200
+    display_change_interval_ms: int = 500
 
     @property
     def update_interval_s(self) -> float:
@@ -40,6 +41,7 @@ class AppConfig:
             interval_ms = int(raw.get("update_interval_ms", 200))
             retry_interval_s = float(raw.get("retry_interval_s", 1.0))
             display_interval_ms = int(raw.get("display_interval_ms", 200))
+            display_change_interval_ms = int(raw.get("display_change_interval_ms", 500))
         except (TypeError, ValueError) as exc:
             raise ConfigError("interval values must be numeric") from exc
 
@@ -49,12 +51,21 @@ class AppConfig:
             raise ConfigError("retry_interval_s must be between 0.1 and 60")
         if not 50 <= display_interval_ms <= 1000:
             raise ConfigError("display_interval_ms must be between 50 and 1000")
+        if not 200 <= display_change_interval_ms <= 1500 or display_change_interval_ms % 100:
+            raise ConfigError("display_change_interval_ms must be 200?1500 in 100 ms steps")
 
         logging = raw.get("logging", True)
         if not isinstance(logging, bool):
             raise ConfigError("logging must be true or false")
 
-        return cls(unit, interval_ms, retry_interval_s, logging, display_interval_ms)
+        return cls(
+            unit,
+            interval_ms,
+            retry_interval_s,
+            logging,
+            display_interval_ms,
+            display_change_interval_ms,
+        )
 
 
 def default_app_dir() -> Path:
@@ -120,3 +131,10 @@ def save_display_interval(path: Path, interval_ms: int) -> None:
     if not 50 <= interval_ms <= 1000:
         raise ConfigError("display_interval_ms must be between 50 and 1000")
     _save_config_value(path, "display_interval_ms", interval_ms)
+
+
+def save_display_change_interval(path: Path, interval_ms: int) -> None:
+    """Persist how often new telemetry values are published to the LCD."""
+    if not 200 <= interval_ms <= 1500 or interval_ms % 100:
+        raise ConfigError("display_change_interval_ms must be 200?1500 in 100 ms steps")
+    _save_config_value(path, "display_change_interval_ms", interval_ms)

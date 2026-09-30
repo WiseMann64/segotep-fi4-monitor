@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .console_logging import ConsoleLogging
 from .display_frequency import DisplayFrequencyPreference
+from .display_update_interval import DisplayUpdateIntervalPreference
 from .startup import StartupRegistration
 from .temperature_unit import TemperatureUnitPreference
 
@@ -42,12 +43,14 @@ class MonitorTray:
         self,
         unit: TemperatureUnitPreference,
         frequency: DisplayFrequencyPreference,
+        display_update_interval: DisplayUpdateIntervalPreference,
         startup: StartupRegistration,
         request_stop: Callable[[], None],
         logger: logging.Logger,
     ) -> None:
         self._unit = unit
         self._frequency = frequency
+        self._display_update_interval = display_update_interval
         self._startup = startup
         self._request_stop = request_stop
         self._logger = logger
@@ -82,6 +85,22 @@ class MonitorTray:
                         checked=lambda _item: self._frequency.interval_ms == 50,
                         radio=True,
                     ),
+                ),
+            ),
+            pystray.MenuItem(
+                self._display_update_menu_text,
+                pystray.Menu(
+                    *(
+                        pystray.MenuItem(
+                            f"{interval_ms / 1000:.1f} s",
+                            self._set_display_update_interval(interval_ms),
+                            checked=lambda _item, value=interval_ms: (
+                                self._display_update_interval.interval_ms == value
+                            ),
+                            radio=True,
+                        )
+                        for interval_ms in DisplayUpdateIntervalPreference.INTERVALS_MS
+                    )
                 ),
             ),
             pystray.Menu.SEPARATOR,
@@ -124,6 +143,26 @@ class MonitorTray:
 
     def _set_20_hz(self, _icon: pystray.Icon, _item: pystray.MenuItem) -> None:
         self._set_frequency(20)
+
+    def _display_update_menu_text(self, _item: pystray.MenuItem) -> str:
+        return f"LCD value interval ({self._display_update_interval.label})"
+
+    def _set_display_update_interval(self, interval_ms: int):
+        def set_interval(_icon: pystray.Icon, _item: pystray.MenuItem) -> None:
+            try:
+                changed = self._display_update_interval.set_interval_ms(interval_ms)
+            except Exception:
+                self._logger.exception(
+                    "unable to save LCD value interval %s ms", interval_ms
+                )
+            else:
+                if changed:
+                    self._logger.info(
+                        "LCD value interval set to %.1f seconds", interval_ms / 1000.0
+                    )
+            self._icon.update_menu()
+
+        return set_interval
 
     def _console_menu_text(self, _item: pystray.MenuItem) -> str:
         return "Close console logging" if self._console.enabled else "Open console logging"

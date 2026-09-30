@@ -34,7 +34,7 @@ LibreHardwareMonitor + psutil
       Segotep FI4 HID
 ~~~
 
-Sensor sampling targets the configured interval (default 200 ms). The independent HID sender repeats the latest valid payload at the tray-selected rate, defaulting to 5 Hz (200 ms). The tray offers 5, 10, and 20 Hz; changes apply immediately and persist in config.json. Slow LHM reads no longer delay keep-alive packets. A cached sample older than five seconds is treated as stale and sending pauses until fresh telemetry arrives. The smoother uses measured elapsed time between sensor samples.
+Sensor sampling targets the configured interval (default 200 ms). The independent HID sender repeats the latest payload at the tray-selected transport rate, defaulting to 5 Hz (200 ms). The tray offers 5, 10, and 20 Hz; changes apply immediately and persist in config.json. Separately, LCD values are refreshed every 0.2 to 1.5 seconds (default 0.5 seconds, selectable in 0.1-second steps). Sensor sampling and smoothing continue at their configured interval, while the sender keeps writing the last LCD payload between value refreshes. Slow LHM reads no longer delay keep-alive packets. A cached sample older than five seconds is treated as stale and sending pauses until fresh telemetry arrives. The smoother uses measured elapsed time between sensor samples.
 
 ## Display smoothing
 
@@ -98,6 +98,7 @@ The default config is %LOCALAPPDATA%\FI4Monitor\config.json:
   "temperature_unit": "C",
   "update_interval_ms": 200,
   "display_interval_ms": 200,
+  "display_change_interval_ms": 500,
   "retry_interval_s": 1.0,
   "logging": true
 }

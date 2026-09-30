@@ -46,6 +46,7 @@ class MonitorRunner:
         clock: Callable[[], float] = time.perf_counter,
         temperature_unit: Callable[[], str] | None = None,
         display_interval_ms: Callable[[], int] | None = None,
+        display_change_interval_ms: Callable[[], int] | None = None,
     ) -> None:
         self.config = config
         self.telemetry = telemetry
@@ -54,10 +55,13 @@ class MonitorRunner:
         self.clock = clock
         self.temperature_unit = temperature_unit or (lambda: config.temperature_unit)
         self.display_interval_ms = display_interval_ms or (lambda: config.display_interval_ms)
+        self.display_change_interval_ms = display_change_interval_ms or (
+            lambda: config.display_change_interval_ms
+        )
         self.display_smoother = DisplaySmoother()
         self.stop_event = Event()
-        self._payload_lock = Lock()
-        self._latest_payload: bytes | None = None
+        self._sample_lock = Lock()
+        self._latest_display_stats: CpuTelemetry | None = None
         self._latest_sample_time: float | None = None
 
     def stop(self) -> None:
@@ -68,14 +72,14 @@ class MonitorRunner:
         if remaining > 0:
             self.stop_event.wait(remaining)
 
-    def _set_latest_payload(self, payload: bytes, sample_time: float) -> None:
-        with self._payload_lock:
-            self._latest_payload = payload
+    def _set_latest_sample(self, stats: CpuTelemetry, sample_time: float) -> None:
+        with self._sample_lock:
+            self._latest_display_stats = stats
             self._latest_sample_time = sample_time
 
-    def _get_latest_payload(self) -> tuple[bytes | None, float | None]:
-        with self._payload_lock:
-            return self._latest_payload, self._latest_sample_time
+    def _get_latest_sample(self) -> tuple[CpuTelemetry | None, float | None]:
+        with self._sample_lock:
+            return self._latest_display_stats, self._latest_sample_time
 
     def _sample_loop(self) -> None:
         telemetry_started = False
@@ -106,8 +110,7 @@ class MonitorRunner:
                     raw_stats = self.telemetry.read()
                     sample_time = self.clock()
                     display_stats = self.display_smoother.update(raw_stats, sample_time)
-                    payload = payload_from_telemetry(display_stats, self.temperature_unit())
-                    self._set_latest_payload(payload, sample_time)
+                    self._set_latest_sample(display_stats, sample_time)
 
                     read_ms = (sample_time - read_started) * 1000.0
                     sample_gap_ms = (
@@ -158,17 +161,22 @@ class MonitorRunner:
             self.logger.info("telemetry sampler stopped")
 
     def _write_loop(self) -> None:
-        interval_ms = self.display_interval_ms()
-        interval = interval_ms / 1000.0
+        send_interval_ms = self.display_interval_ms()
+        send_interval = send_interval_ms / 1000.0
+        change_interval_ms = self.display_change_interval_ms()
+        next_display_update = self.clock()
+        payload: bytes | None = None
+        payload_unit: str | None = None
         next_write = self.clock()
         retry_after = 0.0
         sample_stale = False
         packet_count = 0
         report_started = self.clock()
         self.logger.info(
-            "display sender started: rate_hz=%.1f interval_ms=%d",
-            1000.0 / interval_ms,
-            interval_ms,
+            "display sender started: rate_hz=%.1f send_interval_ms=%d lcd_change_interval_ms=%d",
+            1000.0 / send_interval_ms,
+            send_interval_ms,
+            change_interval_ms,
         )
 
         while not self.stop_event.is_set():
@@ -177,8 +185,8 @@ class MonitorRunner:
                 break
 
             now = self.clock()
-            payload, sample_time = self._get_latest_payload()
-            if payload is not None and sample_time is not None:
+            display_stats, sample_time = self._get_latest_sample()
+            if display_stats is not None and sample_time is not None:
                 sample_age = now - sample_time
                 if sample_age > self.MAX_SAMPLE_AGE_S:
                     if not sample_stale:
@@ -187,11 +195,29 @@ class MonitorRunner:
                         )
                         self.device.close()
                     sample_stale = True
+                    payload = None
+                    payload_unit = None
                 else:
                     if sample_stale:
                         self.logger.info("telemetry sampling resumed; FI4 writes resumed")
                     sample_stale = False
-                    if now >= retry_after:
+                    current_unit = self.temperature_unit()
+                    force_refresh = payload is None or current_unit != payload_unit
+                    if force_refresh or now >= next_display_update:
+                        payload = payload_from_telemetry(display_stats, current_unit)
+                        payload_unit = current_unit
+                        if force_refresh:
+                            next_display_update = now + change_interval_ms / 1000.0
+                        else:
+                            next_display_update += change_interval_ms / 1000.0
+                            if next_display_update <= now:
+                                next_display_update = now + change_interval_ms / 1000.0
+                        self.logger.debug(
+                            "LCD values refreshed: interval_ms=%d sample_age_ms=%.0f",
+                            change_interval_ms,
+                            sample_age * 1000.0,
+                        )
+                    if now >= retry_after and payload is not None:
                         try:
                             if not self.device.connected:
                                 self.device.connect()
@@ -210,10 +236,10 @@ class MonitorRunner:
             now = self.clock()
             if now - report_started >= 1.0:
                 if packet_count:
-                    latest_payload, latest_sample_time = self._get_latest_payload()
+                    _latest_stats, latest_sample_time = self._get_latest_sample()
                     sample_age_ms = (
                         max(0.0, now - latest_sample_time) * 1000.0
-                        if latest_payload is not None and latest_sample_time is not None
+                        if latest_sample_time is not None
                         else 0.0
                     )
                     self.logger.debug(
@@ -224,25 +250,37 @@ class MonitorRunner:
                 packet_count = 0
                 report_started = now
 
-            current_interval_ms = self.display_interval_ms()
-            interval_changed = current_interval_ms != interval_ms
-            if interval_changed:
-                interval_ms = current_interval_ms
-                interval = interval_ms / 1000.0
+            current_send_interval_ms = self.display_interval_ms()
+            send_interval_changed = current_send_interval_ms != send_interval_ms
+            if send_interval_changed:
+                send_interval_ms = current_send_interval_ms
+                send_interval = send_interval_ms / 1000.0
                 self.logger.info(
-                    "display payload frequency changed: rate_hz=%.1f interval_ms=%d",
-                    1000.0 / interval_ms,
-                    interval_ms,
+                    "display payload frequency changed: rate_hz=%.1f send_interval_ms=%d",
+                    1000.0 / send_interval_ms,
+                    send_interval_ms,
+                )
+
+            current_change_interval_ms = self.display_change_interval_ms()
+            if current_change_interval_ms != change_interval_ms:
+                change_interval_ms = current_change_interval_ms
+                payload = None
+                payload_unit = None
+                next_display_update = now
+                self.logger.info(
+                    "LCD value change interval set to %.1f seconds (%d ms)",
+                    change_interval_ms / 1000.0,
+                    change_interval_ms,
                 )
 
             if now < retry_after:
                 next_write = retry_after
-            elif interval_changed:
-                next_write = now + interval
+            elif send_interval_changed:
+                next_write = now + send_interval
             else:
-                next_write += interval
+                next_write += send_interval
                 if next_write <= now:
-                    next_write = now + interval
+                    next_write = now + send_interval
 
     def run(self) -> None:
         self.logger.info("application start")

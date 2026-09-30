@@ -2,6 +2,7 @@
   "temperature_unit": "C",
   "update_interval_ms": 200,
   "display_interval_ms": 200,
+  "display_change_interval_ms": 500,
   "retry_interval_s": 1.0,
   "logging": true
 }

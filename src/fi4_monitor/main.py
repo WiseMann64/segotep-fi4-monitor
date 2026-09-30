@@ -11,6 +11,7 @@ from threading import Thread
 from .config import ConfigError, default_config_path, load_config
 from .device import Fi4Device
 from .display_frequency import DisplayFrequencyPreference
+from .display_update_interval import DisplayUpdateIntervalPreference
 from .logging_setup import configure_logging
 from .runner import MonitorRunner
 from .single_instance import SingleInstance
@@ -69,6 +70,9 @@ def main(argv: list[str] | None = None) -> int:
 
     unit = TemperatureUnitPreference(config.temperature_unit, config_path)
     frequency = DisplayFrequencyPreference(config.display_interval_ms, config_path)
+    display_update_interval = DisplayUpdateIntervalPreference(
+        config.display_change_interval_ms, config_path
+    )
     telemetry = LibreHardwareMonitorProvider()
     runner = MonitorRunner(
         config,
@@ -77,8 +81,11 @@ def main(argv: list[str] | None = None) -> int:
         logger,
         temperature_unit=lambda: unit.current,
         display_interval_ms=lambda: frequency.interval_ms,
+        display_change_interval_ms=lambda: display_update_interval.interval_ms,
     )
-    tray = MonitorTray(unit, frequency, startup, runner.stop, logger)
+    tray = MonitorTray(
+        unit, frequency, display_update_interval, startup, runner.stop, logger
+    )
     worker = Thread(target=runner.run, name="fi4-monitor-loop", daemon=True)
 
     def request_stop(signum: int, _frame: object) -> None:

@@ -23,8 +23,8 @@ dist/
 *.log
 config.local.json
 
-# Vendor binary: obtain from LibreHardwareMonitor release/source separately.
-resources/LibreHardwareMonitorLib.dll
+# LibreHardwareMonitor assemblies and their runtime dependencies are built locally.
+resources/*.dll
 
 # IDE/OS
 .idea/

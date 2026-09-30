@@ -2,65 +2,56 @@
 
 ## Local workflow
 
-```powershell
+~~~powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+.\scripts\build_lhm.ps1
 python -m pip install -r requirements-dev.txt
 python -m pytest
 ruff check .
-```
+~~~
 
-Protocol and config tests do not need a physical FI4. Hardware tests must be run on Windows with the original Segotep software stopped.
+The protocol/config tests do not need a physical FI4. Hardware validation should be run on Windows with the original Segotep software stopped.
 
 ## Milestones
 
-### M1 — protocol driver
+### M1 - Protocol driver
 
-- Unit-test 64-byte payload construction.
-- Test 47 W, 100 W, 104 W, and 123 W encoding.
-- Confirm 50 C / 50% / 50 W on hardware for several minutes.
+- Confirm the 64-byte payload layout against the FI4.
+- Validate temperature, CPU load, and wattage encoding on hardware.
 
-### M2 — utilization
+### M2 - Telemetry
 
-- Confirm psutil total utilization is mapped to 0–100.
-- Compare the displayed load with Task Manager under idle and load.
+- Compare CPU temperature and package power with a trusted monitoring tool.
+- Confirm psutil utilization against Task Manager under idle and load.
 
-### M3 — real telemetry
-
-- Confirm selected temperature and package power sensors against a trusted monitoring tool.
-- Test Intel and AMD naming variants if available.
-
-### M4 — recovery
+### M3 - Recovery
 
 - Start before the cooler is connected.
-- Disable/enable the USB device.
-- Test Windows sleep/resume.
-- Temporarily make telemetry unavailable and confirm retry without process exit.
+- Disable and re-enable the USB device.
+- Test Windows sleep/resume and telemetry recovery.
 
-### M5 — packaging
+### M4 - Packaging
 
-- Build `dist/FI4Monitor` with PyInstaller.
+- Build dist/FI4Monitor with scripts/build.ps1.
 - Run on a clean Windows machine without Python.
-- Confirm no DLL is loaded from the development environment by accident.
+- Confirm all native and .NET DLL dependencies are bundled.
 
-### M6 — startup
+### M5 - Tray and startup
 
-- Add a shortcut to `shell:startup`.
-- Reboot and verify that telemetry and USB startup races recover automatically.
+- The Celsius/Fahrenheit tray menu and per-user Windows startup toggle are implemented.
+- Validate both units on the FI4 and confirm the saved choice survives restart.
+- Reboot and verify telemetry and USB startup recovery.
 
 ## Production checklist
 
 - [ ] Segotep software is closed.
-- [ ] Temperature is correct in Celsius.
-- [ ] Temperature is correct in Fahrenheit.
-- [ ] CPU load is correct.
-- [ ] Wattage below 100 W is correct.
-- [ ] Wattage at and above 100 W is correct.
+- [ ] Temperature is correct in Celsius and Fahrenheit.
+- [ ] CPU load and package power are correct.
 - [ ] No visible flicker at the configured interval.
 - [ ] Several-hour run is stable.
 - [ ] USB reset reconnects automatically.
 - [ ] Sleep/resume reconnects automatically.
 - [ ] Startup race is tolerated.
 - [ ] Two instances cannot run together.
-- [ ] Log rotation works.
 - [ ] Portable build runs without Python.

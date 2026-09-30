@@ -1,11 +1,11 @@
 # Runtime resources
 
-Copy a compatible `LibreHardwareMonitorLib.dll` into this directory before running or building:
+Run the source build script to compile LibreHardwareMonitor and populate this directory:
 
-```text
-resources/LibreHardwareMonitorLib.dll
-```
+~~~powershell
+..\scripts\build_lhm.ps1
+~~~
 
-The DLL is intentionally not committed to this repository. Obtain it from the official LibreHardwareMonitor project/release and verify its license and redistribution terms before publishing a binary release.
+It builds official tag v0.9.6 for .NET 8 and copies LibreHardwareMonitorLib.dll, its runtime assemblies, and upstream license notices here. The binaries are local build outputs and are excluded from Git. Rebuild them after cloning the repository.
 
-The application accepts an explicit DLL path through the `FI4_LHM_DLL` environment variable. This is useful during development when the DLL is stored outside the repository.
+The application accepts an explicit DLL path through the FI4_LHM_DLL environment variable for development.

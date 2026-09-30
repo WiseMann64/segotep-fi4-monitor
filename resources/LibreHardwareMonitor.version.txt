@@ -1,0 +1,1 @@
+﻿v0.9.6 (built locally for net8.0)

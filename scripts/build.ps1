@@ -5,7 +5,11 @@ Set-Location $projectRoot
 
 $lhmDll = Join-Path $projectRoot "resources\LibreHardwareMonitorLib.dll"
 if (-not (Test-Path -LiteralPath $lhmDll)) {
-    throw "Missing resources\LibreHardwareMonitorLib.dll. Copy a compatible LibreHardwareMonitor library before building."
+    & (Join-Path $PSScriptRoot "build_lhm.ps1")
+}
+
+if (-not (Test-Path -LiteralPath $lhmDll)) {
+    throw "LibreHardwareMonitorLib.dll was not produced by scripts/build_lhm.ps1."
 }
 
 python -m pip install -r requirements-dev.txt

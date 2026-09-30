@@ -1,98 +1,69 @@
 # Segotep FI4 Monitor
 
-Portable Windows background monitor untuk menampilkan CPU temperature, CPU utilization, dan CPU package power pada **Segotep FI4 Digital**.
+Portable Windows background monitor for CPU temperature, CPU utilization, and CPU package power on the Segotep FI4 Digital display.
 
-Repository ini adalah starter implementation yang mengikuti protokol FI4 yang sudah terverifikasi. Driver protocol dan HID sudah dipisahkan serta diuji; backend telemetry LibreHardwareMonitor disiapkan sebagai dependency runtime/build yang harus ditempelkan ke package portable.
+The app reads sensors through LibreHardwareMonitor, writes the confirmed FI4 HID payload, and exposes a small system tray menu for the temperature unit, live diagnostics, and Windows startup setting.
 
-## Status
+## Features
 
-- Implemented: payload builder 64-byte, HID report framing, device discovery, reconnect loop, config, logging, single-instance mutex, PyInstaller onedir spec.
-- Implemented: dynamic CPU sensor matching melalui LibreHardwareMonitor.
-- Belum termasuk: tray UI, RGB/fan/pump control, firmware update, installer, dan upload release otomatis.
-- Hardware validation tetap harus dilakukan pada Windows dengan FI4 terpasang.
+- CPU temperature, utilization, and package power on the FI4 display.
+- Display-only EMA smoothing, with faster response to rising temperature and power.
+- Independent HID keep-alive sender, defaulting to 5 Hz, with 5, 10, and 20 Hz tray options.
+- System tray switch for Celsius or Fahrenheit. The choice applies immediately and is saved in the config.
+- Open or close a live console from the tray. It shows recent log lines and live telemetry/device errors.
+- Optional per-user Windows startup registration from the tray, or with command-line flags.
+- Reconnect handling for FI4 USB resets and telemetry startup races.
+- Portable PyInstaller onedir build.
 
-## Quick start (development)
+RGB/fan control and firmware updates are not included. Hardware validation still requires a Windows PC with the FI4 attached.
 
-Persyaratan:
+## Requirements
 
 - Windows 10/11 x64
-- Python 3.11+
-- FI4 tersambung via USB
-- `LibreHardwareMonitorLib.dll` yang kompatibel dengan versi Python/.NET yang dipakai
+- Python 3.11 or later
+- Git and .NET SDK 8 or later to build LibreHardwareMonitor from source
+- FI4 connected over USB
+- [PawnIO driver installed](https://github.com/namazso/PawnIO.Setup/releases) for CPU sensor access through LibreHardwareMonitor
 
-```powershell
+## Build LibreHardwareMonitor locally
+
+The build script fetches the official v0.9.6 source, compiles LibreHardwareMonitorLib for .NET 8, and copies the assembly and its runtime DLL dependencies into resources.
+
+~~~powershell
+.\scripts\build_lhm.ps1
+~~~
+
+The source checkout and compiler output are placed under the Windows temporary directory. The app expects resources\LibreHardwareMonitorLib.dll.
+
+## Development run
+
+~~~powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
 python -m pip install -e .
-python -m pytest
-```
-
-Jalankan setelah menyalin DLL monitoring ke `resources/LibreHardwareMonitorLib.dll`:
-
-```powershell
 python -m fi4_monitor
-```
+~~~
 
-Config default dibaca dari `%LOCALAPPDATA%\FI4Monitor\config.json`. Untuk percobaan awal, salin [config.example.json](config.example.json) ke lokasi tersebut atau gunakan:
+Config defaults to %LOCALAPPDATA%\FI4Monitor\config.json. You can pass another config file with --config. Logs are written to %LOCALAPPDATA%\FI4Monitor\fi4monitor.log.
 
-```powershell
-python -m fi4_monitor --config .\config.example.json
-```
+Right-click the tray icon to switch between Celsius and Fahrenheit, open console logging, enable or disable Windows startup, or exit. The unit selection is persisted in the active config file. Set FI4_LOG_LEVEL=DEBUG to also write raw and smoothed values into the log file.
 
-Log berada di `%LOCALAPPDATA%\FI4Monitor\fi4monitor.log`.
+For command-line startup setup:
 
-## Build portable Windows
+~~~powershell
+python -m fi4_monitor --install-startup
+python -m fi4_monitor --remove-startup
+~~~
 
-```powershell
+The startup entry is per-user under HKCU\Software\Microsoft\Windows\CurrentVersion\Run; no administrator access is needed.
+
+## Portable build
+
+~~~powershell
 .\scripts\build.ps1
-```
+~~~
 
-Output utama berada di `dist\FI4Monitor\FI4Monitor.exe`. Build menggunakan `--onedir` karena lebih mudah memuat `hidapi`, pythonnet, dan native/.NET monitoring dependency secara stabil. Folder hasil build dapat langsung dipindahkan ke komputer target.
+The output is dist\FI4Monitor\FI4Monitor.exe. It includes the LHM assemblies and tray dependencies and can be moved as a folder.
 
-Sebelum build, pastikan file berikut tersedia:
-
-```text
-resources\LibreHardwareMonitorLib.dll
-```
-
-Detail dependency dan keputusan packaging ada di [docs/TECHNICAL.md](docs/TECHNICAL.md).
-
-## Penggunaan di Windows
-
-1. Tutup atau nonaktifkan Segotep Digital agar tidak ada dua proses yang menulis ke HID yang sama.
-2. Jalankan `FI4Monitor.exe` dari folder portable.
-3. Jika sudah stabil, buat shortcut ke `FI4Monitor.exe` di `shell:startup`.
-
-Aplikasi tidak mengubah Windows startup secara otomatis. Device yang belum siap saat login, USB reset, sleep/resume, dan kegagalan write sementara akan ditangani dengan retry.
-
-## Struktur repository
-
-```text
-src/fi4_monitor/
-├── protocol.py                  # payload FI4 murni
-├── device.py                    # discovery, open, write, reconnect
-├── runner.py                    # scheduler dan recovery loop
-├── config.py                    # JSON config
-├── logging_setup.py             # rotating file log
-├── single_instance.py           # Windows mutex
-└── telemetry/
-    ├── provider.py              # abstraction + data model
-    └── libre_hardware_monitor.py
-tests/                           # unit tests tanpa hardware
-docs/TECHNICAL.md                # architecture dan deployment notes
-resources/                       # external LHM DLL, tidak di-commit
-FI4Monitor.spec                  # PyInstaller onedir build
-```
-
-## Roadmap pengembangan
-
-1. Validasi protocol dan refresh rate pada hardware nyata.
-2. Cocokkan sensor CPU package temperature/power dengan beberapa vendor CPU.
-3. Uji sleep/resume, USB disable/enable, dan startup race.
-4. Tambahkan smoke test Windows untuk build portable.
-5. Pertimbangkan tray UI minimal setelah core loop stabil.
-
-## Kontribusi
-
-Lihat [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) untuk workflow, milestone, dan validation checklist.
+Close or disable Segotep Digital before running this app so both programs do not write to the FI4 at the same time.
